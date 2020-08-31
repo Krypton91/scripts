@@ -12,11 +12,11 @@ class CableReel extends ItemBase
 		RegisterNetSyncVariableBool("m_IsPlaceSound");
 	}
 	
-	void ForceIntoHandsNow ( PlayerBase player ) 
+	override void ForceIntoHandsNow ( PlayerBase player ) 
 	{
-		m_ForceIntoHands = true;
-		player.LocalTakeEntityToHands(this); // Local, because ForceIntoHandsNow is executed on both, Client and Server
-		m_ForceIntoHands = false;
+		super.ForceIntoHandsNow(player);
+		if(player.IsUnconsios)
+			return;
 	}
 	
 	override bool CanPutInCargo( EntityAI parent )
