@@ -55,12 +55,12 @@ class Trap_SmallFish extends TrapSpawnBase
 		return IsTakeable();
 	}
 
-	override bool CanReceiveItemIntoCargo( EntityAI child )
+	override bool CanReceiveItemIntoCargo( EntityAI item )
 	{
 		if ( GetHierarchyRootPlayer() != NULL )
 			return false;
 
-		return super.CanReceiveItemIntoCargo( cargo );
+		return super.CanReceiveItemIntoCargo( item );
 	}
 
 	override bool CanReleaseCargo( EntityAI child )
@@ -88,8 +88,7 @@ class Trap_SmallFish extends TrapSpawnBase
 		AddAction(ActionWaterGardenSlot);
 		AddAction(ActionWaterPlant);
 		AddAction(ActionForceDrink);
-		AddAction(ActionPourLiquid);
-		AddAction(ActionDrainLiquid);
+		AddAction(ActionTransferLiquid);
 		AddAction(ActionEmptyBottleBase);
 		AddAction(ActionDrink);
 	}
@@ -138,6 +137,11 @@ class SmallFishTrap extends Trap_SmallFish
 	override string GetLoopDeploySoundset()
 	{
 		return "fishtrap_deploy_SoundSet";
+	}
+	
+	override bool DoPlacingHeightCheck()
+	{
+		return true; //has to be able to catch rain, default distance raycast
 	}
 	
 	// ----------------------------------------------------------------------------------------

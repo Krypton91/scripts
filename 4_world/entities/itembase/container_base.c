@@ -36,7 +36,6 @@ class DeployableContainer_Base extends Container_Base
 		AddAction(ActionPlaceObject);
 	}
 	
-
 	override bool CanReceiveAttachment( EntityAI attachment, int slotId )
 	{
 		if ( GetHealthLevel() == GameConstants.STATE_RUINED )
@@ -44,19 +43,35 @@ class DeployableContainer_Base extends Container_Base
 		
 		return super.CanReceiveAttachment(attachment, slotId);
 	}
+	
+	override bool CanLoadAttachment( EntityAI attachment )
+	{
+		if ( GetHealthLevel() == GameConstants.STATE_RUINED )
+			return false;
+		
+		return super.CanLoadAttachment(attachment);
+	}
 
-	override bool CanReceiveItemIntoCargo( EntityAI cargo )
+	override bool CanReceiveItemIntoCargo( EntityAI item )
 	{
 		if ( GetHealthLevel() == GameConstants.STATE_RUINED )
 			return false;
 
-		return super.CanReceiveItemIntoCargo( cargo );
+		return super.CanReceiveItemIntoCargo( item );
+	}
+	
+	override bool CanLoadItemIntoCargo( EntityAI item )
+	{
+		if ( GetHealthLevel() == GameConstants.STATE_RUINED )
+			return false;
+
+		return super.CanLoadItemIntoCargo( item );
 	}
 	
 	/*
-	override bool CanReceiveItemIntoCargo (EntityAI cargo)
+	override bool CanReceiveItemIntoCargo (EntityAI item)
 	{
-		super.CanReceiveItemIntoCargo( cargo );
+		super.CanReceiveItemIntoCargo( item );
 		
 		if ( GetHealthLevel() == GameConstants.STATE_RUINED )
 			return false;

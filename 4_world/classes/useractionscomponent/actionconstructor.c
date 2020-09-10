@@ -44,7 +44,6 @@ class ActionConstructor
 		actions.Insert(ActionPlantSeed);
 		actions.Insert(ActionDisinfectPlantBit);
 		actions.Insert(ActionTurnOnHeatpack);
-		//actions.Insert(ActionToggleFishing);
 //		actions.Insert(ActionAttachToCharger);
 		actions.Insert(ActionTurnOnTransmitter);	
 		actions.Insert(ActionTurnOffTransmitter);
@@ -79,12 +78,7 @@ class ActionConstructor
 		actions.Insert(ActionNextCombinationLockDial);
 		actions.Insert(ActionAttachToConstruction);
 		actions.Insert(ActionTakeMaterialToHandsSwitch);
-		actions.Insert(ActionFoldBandanaToMask);
-		actions.Insert(ActionFoldBandanaToHead);
-		actions.Insert(ActionUnfoldBandana);
 		actions.Insert(ActionClapBearTrapWithThisItem);
-		actions.Insert(ActionZoomIn);
-		actions.Insert(ActionZoomOut);
 		actions.Insert(ActionPlaceFireplaceIntoBarrel);
 		actions.Insert(ActionStopEngine);
 		actions.Insert(ActionUnfoldMap);
@@ -201,8 +195,7 @@ class ActionConstructor
 		//actions.Insert(ActionWritePaper);
 		//actions.Insert(ActionReadPaper);
 		actions.Insert(ActionFillFuel);
-		actions.Insert(ActionPourLiquid);
-		actions.Insert(ActionDrainLiquid);
+		actions.Insert(ActionTransferLiquid);
 		actions.Insert(ActionStartEngine);
 		actions.Insert(ActionRaiseMegaphone);
 		actions.Insert(ActionActivateTrap);
@@ -287,6 +280,11 @@ class ActionConstructor
 		actions.Insert(ActionCheckPulse);
 		actions.Insert(ActionUnpin);
 		actions.Insert(ActionPin);
+		actions.Insert(ActionTakeHybridAttachment);
+		actions.Insert(ActionTakeHybridAttachmentToHands);
+		actions.Insert(ActionWorldFlagActionSwitch);
+		actions.Insert(ActionRaiseFlag);
+		actions.Insert(ActionLowerFlag);
 		//vehicle actions
 		actions.Insert(ActionSwitchLights);
 		
@@ -298,8 +296,6 @@ class ActionConstructor
 		actions.Insert(FirearmActionLoadMultiBullet);
 		actions.Insert(FirearmActionLoadBullet);
 		
-		actions.Insert(ActionTakeItem);
-		
 		actions.Insert(ActionLoadMagazineQuick);
 		actions.Insert(FirearmActionAttachMagazineQuick);
 		actions.Insert(FirearmActionMechanicManipulate);
@@ -310,6 +306,7 @@ class ActionConstructor
 		
 		actions.Insert(FirearmActionLoadBulletQuick);
 		actions.Insert(FirearmActionLoadMultiBulletQuick);
+		actions.Insert(FirearmActionLoadMultiBulletRadial);
 
 		actions.Insert(ActionPullBodyFromTransport);
 		

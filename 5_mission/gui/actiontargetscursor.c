@@ -301,6 +301,7 @@ class ActionTargetsCursor extends ScriptedWidgetEventHandler
 			}
 			else if (m_Target.GetObject() != null)
 			{
+				CheckRefresherFlagVisibility(m_Target.GetObject());
 				//! build cursor for new target
 				if ( m_Target.GetObject() != m_CachedObject.Get() )
 				{
@@ -690,12 +691,13 @@ class ActionTargetsCursor extends ScriptedWidgetEventHandler
 		return desc;
 	}
 	
+	//getting name of the entity
 	protected string GetItemDesc(ActionBase action)
 	{
 		string desc = "";
 		if(m_Target && m_Target.GetObject())
 		{
-			if( m_Target.GetObject().IsItemBase() )
+			if( m_Target.GetObject().IsItemBase() || m_Target.GetObject().IsTransport() )
 			{
 				desc = m_Target.GetObject().GetDisplayName();
 			}
@@ -711,17 +713,48 @@ class ActionTargetsCursor extends ScriptedWidgetEventHandler
 	{
 		int health = -1;
 
-		if(m_Interact && !m_Interact.HasTarget())
+		if ( m_Interact && !m_Interact.HasTarget() )
 		{
 			return health;
 		}
-		if(m_Target && m_Target.GetObject())
+		if ( m_Target && m_Target.GetObject() )
 		{
-			if( m_Target.GetObject().IsHealthVisible() )
+			Object tgObject = m_Target.GetObject();
+
+			if ( tgObject.IsHealthVisible() )
 			{
-				health = m_Target.GetObject().GetHealthLevel();
+				//bool showZoneHealth = true;
+				if ( tgObject.ShowZonesHealth() )
+				{
+					//
+					string zone = "";
+					string compName;
+					array<string> selections = new array<string>();
+					
+					tgObject.GetActionComponentNameList( m_Target.GetComponentIndex(), selections, "view" );
+					
+					for ( int s = 0; s < selections.Count(); s++ )
+					{
+						compName = selections[s];
+						EntityAI targetEntity = EntityAI.Cast( tgObject );
+
+						if ( targetEntity && DamageSystem.GetDamageZoneFromComponentName( targetEntity , compName, zone))
+						{
+							health = m_Target.GetObject().GetHealthLevel(zone);
+							break;
+						}
+					}
+
+					if ( zone == "" )
+						health = m_Target.GetObject().GetHealthLevel();
+				}
+				else
+				{
+					health = m_Target.GetObject().GetHealthLevel();
+				}
+
 			}
-			else if( !m_Target.GetObject().IsAlive() )
+			else if ( !m_Target.GetObject().IsAlive() )
 			{
 				health = m_Target.GetObject().GetHealthLevel();
 			}
@@ -1034,5 +1067,15 @@ class ActionTargetsCursor extends ScriptedWidgetEventHandler
 		textWidget.SetText(keyName);
 		//frameWidget.Show(true);
 		textWidget.Show(true);
+	}
+	
+	protected void CheckRefresherFlagVisibility(Object object)
+	{
+		EntityAI entity;
+		Widget w = m_Root.FindAnyWidget("item_flag_icon");
+		if ( Class.CastTo(entity,object) && w )
+		{
+			w.Show(entity.IsRefresherSignalingViable() && m_Player.IsTargetInActiveRefresherRange(entity));
+		}
 	}
 }

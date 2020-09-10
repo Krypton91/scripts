@@ -594,7 +594,12 @@ class ActionBase : ActionBase_Basic
 
 	bool Can( PlayerBase player, ActionTarget target, ItemBase item, int condition_mask )
 	{
-		if ( ( (condition_mask & m_ConditionMask) != condition_mask ) || ( !IsFullBody(player) && !player.IsPlayerInStance(GetStanceMask(player)) ) )
+		if ( ( (condition_mask & m_ConditionMask) != condition_mask ) || ( !IsFullBody(player) && !player.IsPlayerInStance(GetStanceMask(player)) ) || player.IsRolling() )
+			return false;
+		
+		int stanceIdx = DayZPlayerUtils.ConvertStanceMaskToStanceIdx(GetStanceMask(player));
+		
+		if ( stanceIdx != -1 && IsFullBody(player) && !DayZPlayerUtils.PlayerCanChangeStance(player, stanceIdx ))
 			return false;
 		
 		if ( HasTarget() )

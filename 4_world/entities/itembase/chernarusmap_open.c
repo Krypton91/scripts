@@ -7,4 +7,4 @@ class ChernarusMap extends ItemMap
 		AddAction(ActionUnfoldMap);
 	}
 }
-class DBM_GPSMAP extends ItemMap {};
+class ChernarusMap_Open extends ItemMap {}

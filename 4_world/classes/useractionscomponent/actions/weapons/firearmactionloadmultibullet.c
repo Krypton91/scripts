@@ -29,14 +29,12 @@ class FirearmActionLoadMultiBullet : FirearmActionBase
 	
 	override bool ActionCondition( PlayerBase player, ActionTarget target, ItemBase item ) //condition for action
 	{
-		Weapon_Base wpn = Weapon_Base.Cast(item);
-		Magazine mag = Magazine.Cast(target.GetObject());
+		if (!super.ActionCondition( player, target, item ))
+			return false;
 		
-		if (wpn && mag )
-			if ( player.GetWeaponManager().CanLoadBullet(wpn,mag) )
-				return true;
-
-		return false;
+		Weapon_Base wpn = Weapon_Base.Cast(item);
+		Magazine mag = Magazine.Cast(target.GetObject());		
+		return mag && player.GetWeaponManager().CanLoadBullet(wpn,mag);
 	}
 	
 	override void Start( ActionData action_data )
@@ -130,6 +128,9 @@ class FirearmActionLoadMultiBulletQuick : FirearmActionBase
 	
 	override bool ActionCondition( PlayerBase player, ActionTarget target, ItemBase item ) //condition for action
 	{
+		if (!super.ActionCondition( player, target, item ))
+			return false;
+		
 		Weapon_Base weapon = Weapon_Base.Cast( item );
 		return player.GetWeaponManager().CanLoadBullet(weapon ,player.GetWeaponManager().GetPreparedMagazine());
 	}
@@ -166,6 +167,56 @@ class FirearmActionLoadMultiBulletQuick : FirearmActionBase
 	}
 	
 	override void OnEndInput( ActionData action_data )
+	{
+		action_data.m_Player.GetWeaponManager().LoadMultiBulletStop();
+	}
+};
+
+class FirearmActionLoadMultiBulletRadial : FirearmActionBase
+{	
+	//-----------------------------------------------------
+	// 	Action events and methods
+	//-----------------------------------------------------
+	void FirearmActionLoadMultiBulletRadial() 
+	{
+	}
+	
+	override bool HasProgress()
+	{
+		return false;
+	}
+	
+	override void CreateConditionComponents()  
+	{
+		m_ConditionItem = new CCINonRuined();
+		m_ConditionTarget = new CCTSelf;
+	}
+	
+	override bool CanContinue( ActionData action_data )
+	{
+		if (!super.CanContinue( action_data ))
+			return false;
+		
+		return ActionCondition(action_data.m_Player, action_data.m_Target, action_data.m_MainItem);
+	}
+	
+	override bool ActionCondition( PlayerBase player, ActionTarget target, ItemBase item ) //condition for action
+	{
+		if (!super.ActionCondition( player, target, item ))
+			return false;
+		
+		Weapon_Base wpn = Weapon_Base.Cast(item);
+		Magazine mag = Magazine.Cast(target.GetObject());		
+		return mag && player.GetWeaponManager().CanLoadBullet(wpn,mag);
+	}
+	
+	override void OnStart( ActionData action_data )
+	{
+		Magazine mag = Magazine.Cast(action_data.m_Target.GetObject());	
+		action_data.m_Player.GetWeaponManager().LoadMultiBullet(mag, this);
+	}
+	
+	override void OnEnd( ActionData action_data )
 	{
 		action_data.m_Player.GetWeaponManager().LoadMultiBulletStop();
 	}

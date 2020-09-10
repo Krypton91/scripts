@@ -116,11 +116,13 @@ class DayZPlayerInventory : HumanInventoryWithFSM
 			m_Taking.AddTransition(new HandTransition(  m_Taking.m_Show, _abt_,   m_Equipped));
 
 		m_FSM.AddTransition(new HandTransition( m_Equipped, __M__,  m_MovingTo, NULL, new HandSelectAnimationOfMoveFromHandsEvent(GetManOwner())));
+		m_FSM.AddTransition(new HandTransition( m_MovingTo, __Xd_,  m_Empty, new HandActionDestroyed, new HandGuardHasDestroyedItemInHands(GetManOwner())));
 		m_FSM.AddTransition(new HandTransition( m_MovingTo, _fin_,  m_Empty   , null, null));
 			m_MovingTo.AddTransition(new HandTransition(  m_MovingTo.m_Hide, _abt_,   m_Equipped));
 			m_MovingTo.AddTransition(new HandTransition(  m_MovingTo.m_Show, _abt_,   m_Empty));
 
 		m_FSM.AddTransition(new HandTransition( m_Equipped, __W__,  m_Swapping, NULL, new HandSelectAnimationOfSwapInHandsEvent(GetManOwner())));
+		m_FSM.AddTransition(new HandTransition( m_Swapping, __Xd_,  m_Empty, new HandActionDestroyed, new HandGuardHasDestroyedItemInHands(GetManOwner())));
 		m_FSM.AddTransition(new HandTransition( m_Swapping, _fin_,  m_Equipped, null, null));
 		m_FSM.AddTransition(new HandTransition( m_Swapping, _abt_,  m_Equipped, null, null));
 
@@ -685,6 +687,9 @@ class DayZPlayerInventory : HumanInventoryWithFSM
 					}
 				}
 				
+				if (GetDayZPlayerOwner().GetInstanceType() == DayZPlayerInstanceType.INSTANCETYPE_SERVER)
+					CheckForRope(e.GetSrc(), e.GetDst());
+				
 				if (handling_juncture)
 				{
 					// juncture is already handled inside DayZPlayer::Simulate so it can be handled synchronously right now without delaying via m_PostedEvent
@@ -875,16 +880,9 @@ class DayZPlayerInventory : HumanInventoryWithFSM
 	// Hacky solution for dealing with fencekit rope related issues, could be fixed by introducing some indicator that this item behaves differently or sth..
 	void CheckForRope(InventoryLocation src, InventoryLocation dst)
 	{
-		if (src.GetType() == InventoryLocationType.ATTACHMENT)
-		{
-			Rope rope = Rope.Cast(src.GetItem());
-			Print(rope);
-			if (rope)
-			{
-				Print(dst);
-				rope.SetTargetLocation(dst);
-			}
-		}
+		Rope rope = Rope.Cast(src.GetItem());
+		if (rope)
+			rope.SetTargetLocation(dst);
 	}
 	
 	bool IsServerOrLocalPlayer()
@@ -1274,12 +1272,32 @@ class DayZPlayerInventory : HumanInventoryWithFSM
 #endif
 	}
 	
-	override void HandEvent (InventoryMode mode, HandEventBase e)
+	override bool HandEvent(InventoryMode mode, HandEventBase e)
 	{
-		if(!m_DeferredEvent)
+		if (!m_DeferredEvent)
 		{
-			m_DeferredEvent = new DeferredHandEvent(mode,e);
+			EntityAI itemInHands = GetEntityInHands();
+			InventoryLocation handInventoryLocation = new InventoryLocation;
+			handInventoryLocation.SetHands(GetInventoryOwner(), itemInHands);
+			
+			bool hadHandReservation = false;
+			
+			if (HasInventoryReservation(itemInHands, handInventoryLocation))
+			{
+				ClearInventoryReservation(itemInHands, handInventoryLocation);
+				hadHandReservation = true;	
+			}
+			
+			if (e.CanPerformEvent())
+			{
+				m_DeferredEvent = new DeferredHandEvent(mode,e);
+				return true;
+			}
+			
+			if (hadHandReservation)
+				AddInventoryReservation(itemInHands, handInventoryLocation, GameInventory.c_InventoryReservationTimeoutMS);
 		}
+		return false;
 	}
 	
 	

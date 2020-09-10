@@ -1,9 +1,25 @@
-class ActionGetOutTransport: ActionInteractBase
+class GetOutTransportActionData : ActionData
 {
+	Car m_Car;
+	vector m_StartLocation;
+	float m_CarSpeed;
+	bool m_WasJumpingOut = false;
+}
+
+class ActionGetOutTransport: ActionBase
+{
+
+	
 	void ActionGetOutTransport()
 	{
 		m_StanceMask = DayZPlayerConstants.STANCEMASK_ALL;
 		//m_HUDCursorIcon = "GetInDriver";
+	}
+	
+	override ActionData CreateActionData()
+	{
+		ActionData action_data = new GetOutTransportActionData;
+		return action_data;
 	}
 
 
@@ -69,16 +85,21 @@ class ActionGetOutTransport: ActionInteractBase
 			
 			if ( trans )
 			{
+				GetOutTransportActionData got_action_data = GetOutTransportActionData.Cast(action_data);
 				Car car;
 				if ( Class.CastTo(car, trans) )
 				{
+					got_action_data.m_StartLocation = got_action_data.m_Player.GetPosition();
+					got_action_data.m_Car = car;
 					float speed = car.GetSpeedometer();
+					got_action_data.m_CarSpeed = speed;
 					if ( speed <= 8 )
 					{
 						vehCommand.GetOutVehicle();
 					}
 					else
 					{
+						got_action_data.m_WasJumpingOut = true;
 						vehCommand.JumpOutVehicle();
 					}
 					//action_data.m_Player.GetItemAccessor().HideItemInHands(false);
@@ -106,10 +127,9 @@ class ActionGetOutTransport: ActionInteractBase
 
 	override void OnUpdate(ActionData action_data)
 	{
-
-		if(action_data.m_State == UA_START)
+		if (action_data.m_State == UA_START)
 		{
-			if( !action_data.m_Player.GetCommand_Vehicle().IsGettingOut() )
+			if ( !action_data.m_Player.GetCommand_Vehicle() )
 			{
 				End(action_data);
 			}
@@ -136,7 +156,7 @@ class ActionGetOutTransport: ActionInteractBase
 		return AC_INTERACT;
 	}
 	
-	override void OnEndClient( ActionData action_data )
+	override void OnEnd( ActionData action_data )
 	{
 		if ( action_data.m_Player.GetInventory() ) 
 				action_data.m_Player.GetInventory().UnlockInventory(LOCK_FROM_SCRIPT);
@@ -144,7 +164,21 @@ class ActionGetOutTransport: ActionInteractBase
 	
 	override void OnEndServer( ActionData action_data )
 	{
-		if ( action_data.m_Player.GetInventory() ) 
-				action_data.m_Player.GetInventory().UnlockInventory(LOCK_FROM_SCRIPT);
+		GetOutTransportActionData got_action_data = GetOutTransportActionData.Cast(action_data);
+		vector endLocation = action_data.m_Player.GetPosition();
+		
+		vector contact_pos;
+		vector contact_dir;
+		int contact_component;
+		
+		set<Object> result = new set<Object>;
+		
+		vector offset = Vector(0, 2, 0);
+		
+		if (DayZPhysics.RaycastRV(got_action_data.m_StartLocation, endLocation, contact_pos, contact_dir, contact_component, result, got_action_data.m_Car, action_data.m_Player, false, false, ObjIntersectView, 0.3))
+			got_action_data.m_Player.SetPosition(contact_pos);
+
+		if (got_action_data.m_WasJumpingOut)
+			got_action_data.m_Player.OnJumpOutVehicleFinish(got_action_data.m_CarSpeed);
 	}
 };

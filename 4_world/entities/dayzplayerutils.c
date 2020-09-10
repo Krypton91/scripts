@@ -154,6 +154,8 @@ class DayZPlayerUtils
 		return ret;
 	}
 	
+	static proto native bool PlayerCanChangeStance(DayZPlayer pPlayer, int pTargetStance, bool forceCheck = false);
+	
 	//! inventory DayZPlayer utils
 	
 	/**@fn		FindMagazinesForAmmo
@@ -356,6 +358,32 @@ class DayZPlayerUtils
 		c.Insert(new ComponentCollisionCapsule(0.10, "RightLeg", "RightFoot"));
 
 		DayZPlayerUtils.InitComponentCollisions(player, b, c);
+	}
+	
+	static int ConvertStanceMaskToStanceIdx(int stanceMask)
+	{
+		switch (stanceMask)
+		{
+			case stanceMask | DayZPlayerConstants.STANCEMASK_PRONE:
+				return DayZPlayerConstants.STANCEIDX_PRONE;
+			
+			case stanceMask | DayZPlayerConstants.STANCEMASK_CROUCH:
+				return DayZPlayerConstants.STANCEIDX_CROUCH;
+			
+			case stanceMask | DayZPlayerConstants.STANCEMASK_ERECT:
+				return DayZPlayerConstants.STANCEIDX_ERECT;
+			
+			case stanceMask | DayZPlayerConstants.STANCEMASK_RAISEDPRONE:
+				return DayZPlayerConstants.STANCEIDX_RAISEDPRONE;
+			
+			case stanceMask | DayZPlayerConstants.STANCEMASK_RAISEDCROUCH:
+				return DayZPlayerConstants.STANCEIDX_RAISEDCROUCH;
+			
+			case stanceMask | DayZPlayerConstants.STANCEMASK_RAISEDERECT:
+				return DayZPlayerConstants.STANCEIDX_RAISEDERECT;
+		}
+		
+		return -1;
 	}
 
 

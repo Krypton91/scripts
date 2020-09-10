@@ -21,7 +21,6 @@ class Heatpack : ItemBase
 		if (GetGame().IsServer())
 		{
 			SetHealth(0);
-			SetTemperature(0);
 		}
 	}
 	

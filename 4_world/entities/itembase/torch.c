@@ -363,10 +363,14 @@ class Torch : ItemBase
 	
 	void TryTransformIntoStick()
 	{
+		PlayerBase player = PlayerBase.Cast(GetHierarchyRootPlayer());
+		if ( m_IsBeingDestructed || (player && player.IsPlayerDisconnected()) )
+			return;
+		
+		m_IsBeingDestructed = true;
+		
 		if ( CanTransformIntoStick() )
-		{
-			PlayerBase player = PlayerBase.Cast( GetHierarchyParent() );
-				
+		{				
 			if (player)
 			{
 				// Transform object into wooden stick
@@ -409,21 +413,15 @@ class Torch : ItemBase
 			if (GetGame().IsServer())
 			{
 				EntityAI rags = EntityAI.Cast(GetGame().CreateObjectEx(item.GetType(), GetPosition(), ECE_PLACE_ON_SURFACE));
-				MiscGameplayFunctions.TransferItemProperties(item, rags);
+				if( rags )
+					MiscGameplayFunctions.TransferItemProperties(item, rags);
 			}
 			return;
 		}
 		
 		CalculateQuantity();
 		UpdateCheckForReceivingUpgrade();
-		
-		PlayerBase player = PlayerBase.Cast(GetHierarchyRootPlayer());
-		if ( (player && player.IsPlayerDisconnected()) )
-		{
-			return;
-		}
 
-		m_IsBeingDestructed = true;
 		TryTransformIntoStick();
 	}
 	

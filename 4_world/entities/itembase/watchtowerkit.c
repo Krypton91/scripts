@@ -18,6 +18,11 @@ class WatchtowerKit extends ItemBase
 		}
 	}
 	
+	override bool IsBasebuildingKit()
+	{
+		return true;
+	}
+	
 	override void EEInit()
 	{
 		super.EEInit();
@@ -32,17 +37,16 @@ class WatchtowerKit extends ItemBase
 	override void EEItemDetached(EntityAI item, string slot_name)
 	{
 		super.EEItemDetached( item, slot_name );
+		
 		PlayerBase player = PlayerBase.Cast(GetHierarchyRootPlayer());
-		if( player && player.IsPlayerDisconnected() )
-		{
+		if ( player && player.IsPlayerDisconnected() )
 			return;
-		}
+		
 		if (item && slot_name == "Rope")
 		{
 			if ((GetGame().IsServer() || !GetGame().IsMultiplayer()) && !m_DeployedRegularly)
 			{
 				DisassembleKit(ItemBase.Cast(item));
-				item.Delete();
 				Delete();
 			}
 		}
@@ -146,7 +150,12 @@ class WatchtowerKit extends ItemBase
 	override bool IsDeployable()
 	{
 		return true;
-	}	
+	}
+	
+	override bool CanAssignAttachmentsToQuickbar()
+	{
+		return false;
+	}
 	
 	override string GetDeploySoundset()
 	{
@@ -176,6 +185,16 @@ class WatchtowerKit extends ItemBase
 			m_DeployLoopSound.SetSoundFadeOut(0.5);
 			m_DeployLoopSound.SoundStop();
 		}
+	}
+	
+	override bool DoPlacingHeightCheck()
+	{
+		return true;
+	}
+	
+	override float HeightCheckOverride()
+	{
+		return 2.83;//9.56;
 	}
 	
 	override void SetActions()
@@ -211,9 +230,14 @@ class WatchtowerKit extends ItemBase
 			return;
 		
 		InventoryLocation targetLoc = rope.GetTargetLocation();
-		if (targetLoc && targetLoc.GetType() == InventoryLocationType.ATTACHMENT)
+		if (targetLoc && targetLoc.GetType() != InventoryLocationType.GROUND)
 			return;
-
-				GetGame().CreateObjectEx("Rope",GetPosition(),ECE_PLACE_ON_SURFACE);
+		
+		EntityAI newRope = EntityAI.Cast(GetGame().CreateObjectEx(rope.GetType(), GetPosition(), ECE_PLACE_ON_SURFACE));
+		
+		if (newRope)
+			MiscGameplayFunctions.TransferItemProperties(rope, newRope);
+		
+		rope.Delete();
 	}
 }

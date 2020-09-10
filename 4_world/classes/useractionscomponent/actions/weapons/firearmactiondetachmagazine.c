@@ -109,14 +109,12 @@ class FirearmActionDetachMagazine_Old : FirearmActionBase
 	
 	override bool ActionCondition( PlayerBase player, ActionTarget target, ItemBase item ) //condition for action
 	{
+		if (!super.ActionCondition( player, target, item ))
+			return false;
+		
+		Magazine mag = Magazine.Cast(target.GetObject());
 		Weapon_Base wpn = Weapon_Base.Cast(item);
-		if (wpn && wpn.CanProcessWeaponEvents())
-		{
-			Magazine mag = Magazine.Cast(target.GetObject());
-			if (player.GetWeaponManager().CanDetachMagazine(wpn,mag))
-				return true;
-		}
-		return false;
+		return mag && player.GetWeaponManager().CanDetachMagazine(wpn,mag);
 	}
 	
 	override bool ActionConditionContinue( ActionData action_data)
@@ -142,8 +140,8 @@ class AdvDetachMagActionReciveData : ActionReciveData
 }
 class AdvDetachMagActionData : SequentialActionData
 {
-	ref InventoryLocation  m_ilWeapon;
-	ref InventoryLocation  m_ilMagazine;
+	ref InventoryLocation  m_ilWeapon = new InventoryLocation;
+	ref InventoryLocation  m_ilMagazine = new InventoryLocation;
 }
 
 class FirearmActionDetachMagazine : ActionSequentialBase
@@ -244,8 +242,8 @@ class FirearmActionDetachMagazine : ActionSequentialBase
 		AdvDetachMagActionReciveData recive_data_dm = AdvDetachMagActionReciveData.Cast(action_recive_data);
 		AdvDetachMagActionData action_data_dm = AdvDetachMagActionData.Cast(action_data);
 		
-		action_data_dm.m_ilWeapon = recive_data_dm.m_ilWeapon;
-		action_data_dm.m_ilMagazine = recive_data_dm.m_ilMagazine;
+		action_data_dm.m_ilWeapon.Copy(recive_data_dm.m_ilWeapon);
+		action_data_dm.m_ilMagazine.Copy(recive_data_dm.m_ilMagazine);
 	}	
 	
 	
@@ -267,11 +265,12 @@ class FirearmActionDetachMagazine : ActionSequentialBase
 	
 	override bool ActionCondition(PlayerBase player, ActionTarget target, ItemBase item)
 	{
+		if (!super.ActionCondition( player, target, item ))
+			return false;
+		
 		Weapon_Base wpn = Weapon_Base.Cast( item );
 		int mi = wpn.GetCurrentMuzzle();
-		if( wpn && wpn.GetMagazine(mi) == target.GetObject() )
-			return true;
-		return false;
+		return wpn && wpn.GetMagazine(mi) == target.GetObject();
 	}
 	
 	override bool ActionConditionContinue( ActionData action_data )
@@ -348,5 +347,16 @@ class FirearmActionDetachMagazine : ActionSequentialBase
 					break;
 			}
 		}
+	}
+	
+	override void OnStartServer( ActionData action_data )
+	{
+		AdvDetachMagActionData action_data_dm = AdvDetachMagActionData.Cast(action_data);
+		GetGame().AddInventoryJuncture(action_data.m_Player, EntityAI.Cast(action_data.m_Target.GetObject()),action_data_dm.m_ilMagazine, true, 10000);
+	}
+	
+	override void OnEndServer( ActionData action_data )
+	{
+		GetGame().ClearJuncture(action_data.m_Player, EntityAI.Cast(action_data.m_Target.GetObject()));
 	}
 }

@@ -60,12 +60,12 @@ class ActionDismantlePart: ActionContinuousBase
 
 	override bool ActionCondition( PlayerBase player, ActionTarget target, ItemBase item )
 	{	
-		return DismantleCondition( player, target, item, true );
+		return DismantleCondition( player, target, item, true ) && player.m_MovementState.m_iStanceIdx != DayZPlayerConstants.STANCEIDX_PRONE;
 	}
 	
 	override bool ActionConditionContinue( ActionData action_data )
 	{	
-		return DismantleCondition( action_data.m_Player, action_data.m_Target, action_data.m_MainItem , false );
+		return DismantleCondition( action_data.m_Player, action_data.m_Target, action_data.m_MainItem , false ) && action_data.m_Player.m_MovementState.m_iStanceIdx != DayZPlayerConstants.STANCEIDX_PRONE;
 	}	
 	
 	override void OnFinishProgressServer( ActionData action_data )
@@ -127,7 +127,7 @@ class ActionDismantlePart: ActionContinuousBase
 			if ( target_object && target_object.CanUseConstruction() )
 			{
 				//invalid if is gate and is locked
-				if (Class.CastTo(target_entity,target_object) && target_entity.FindAttachmentBySlotName("Att_CombinationLock"))
+				if ( Class.CastTo(target_entity,target_object) && (target_entity.FindAttachmentBySlotName("Att_CombinationLock") || target_entity.FindAttachmentBySlotName("Material_FPole_Flag")) )
 				{
 					return false;
 				}

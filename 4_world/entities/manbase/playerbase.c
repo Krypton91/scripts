@@ -6,10 +6,12 @@ class PlayerBase extends ManBase
 	private int						m_LastShavedSeconds;
 	private int						m_BloodType;
 	private bool					m_HasBloodTypeVisible;
-	private bool					m_LiquidTendencyDrain;
+	private bool					m_LiquidTendencyDrain; //client-side only
+	private bool 					m_FlagRaisingTendency;
 	private bool					m_HasBloodyHandsVisible;
 	protected bool 					m_PlayerLoaded;
 	protected bool 					m_PlayerDisconnectProcessed;
+	protected bool 					m_ProcessUIWarning;
 	protected int 					m_LocalRefreshAnimStateIdx;
 	protected int 					m_RefreshAnimStateIdx;
 	private int 					m_StoreLoadVersion;
@@ -84,6 +86,7 @@ class PlayerBase extends ManBase
 	int 							m_ShockSimplified;
 	bool							m_IsRestrained;
 	bool 							m_IsRestrainStarted;
+	bool 							m_IsRestrainPrelocked;
 	bool							m_ImmunityBoosted;
 	bool							m_AreHandsLocked; //Currently only used to block quickbar usage after canceling placement
 	float							m_UnconsciousVignetteTarget = 2;
@@ -95,6 +98,7 @@ class PlayerBase extends ManBase
 	vector 							m_DefaultHitPosition;
 	int								m_DiseaseCount;
 	protected bool					m_AllowQuickRestrain;
+	protected bool					m_AllowQuickFishing;
 	protected int					m_Shakes;
 	int								m_BreathVapour;
 	int 							m_HealthLevel;
@@ -218,6 +222,8 @@ class PlayerBase extends ManBase
 		m_HasBloodyHandsVisible = false;
 		m_PlayerLoaded = false;
 		m_PlayerSelected = false;
+		m_ProcessUIWarning = false;
+		m_FlagRaisingTendency = true;
 		m_LiquidTendencyDrain = false;
 		m_UAParamMessage = new Param1<string>("");
 		m_UAParam = new Param2<int,int>(0,0);
@@ -358,8 +364,9 @@ class PlayerBase extends ManBase
 		RegisterNetSyncVariableBool("m_IsInWater");
 		RegisterNetSyncVariableBool("m_HasBloodyHandsVisible");
 		RegisterNetSyncVariableBool("m_HasBloodTypeVisible");
-		RegisterNetSyncVariableBool("m_LiquidTendencyDrain");
+		//RegisterNetSyncVariableBool("m_LiquidTendencyDrain");
 		RegisterNetSyncVariableBool("m_IsRestrainStarted");
+		RegisterNetSyncVariableBool("m_IsRestrainPrelocked");
 		
 		m_OriginalSlidePoseAngle = GetSlidePoseAngle();
 		
@@ -920,7 +927,7 @@ class PlayerBase extends ManBase
 		AddAction(ActionStartEngine);
 		AddAction(ActionStopEngine);
 		AddAction(ActionSwitchSeats);
-		AddAction(ActionTakeMaterialToHandsSwitch);
+		//AddAction(ActionTakeMaterialToHandsSwitch);
 		AddAction(ActionUncoverHeadSelf);
 		//AddAction(ActionAttach);
 		AddAction(ActionDrinkPondContinuous);
@@ -932,9 +939,7 @@ class PlayerBase extends ManBase
 		AddAction(ActionWashHandsWaterOne);
 		AddAction(ActionGetOutTransport);
 		//AddAction(ActionSwitchLights);
-		AddAction(ActionTakeMaterialToHands);
-		
-		AddAction(ActionPullBodyFromTransport);
+		//AddAction(ActionTakeMaterialToHands);
 		
 		/*
 		AddAction(AT_VEH_ENGINE_START);// TODO -> target
@@ -958,6 +963,7 @@ class PlayerBase extends ManBase
 		AddAction(ActionUncoverHeadTarget);
 		AddAction(ActionUngagTarget);
 		AddAction(ActionCheckPulse);
+		AddAction(ActionPullBodyFromTransport);
 		//AddAction(AT_GIVE_ITEM);
 	}
 	
@@ -1004,7 +1010,7 @@ class PlayerBase extends ManBase
 			action_array = new array<ActionBase_Basic>;
 			m_InputActionMap.Insert(ai, action_array);
 		}
-		action_array.Insert(action); 
+		action_array.Insert(action);
 	}
 	
 	void RemoveAction(typename actionName)
@@ -1196,9 +1202,19 @@ class PlayerBase extends ManBase
 		m_AllowQuickRestrain = enable;
 	}
 	
+	void SetQuickFishing(bool enable)
+	{
+		m_AllowQuickFishing = enable;
+	}
+	
 	bool IsQuickRestrain()
 	{
 		return m_AllowQuickRestrain;
+	}
+	
+	bool IsQuickFishing()
+	{
+		return m_AllowQuickFishing;
 	}
 	
 	PlayerStats GetPlayerStats()
@@ -1245,6 +1261,17 @@ class PlayerBase extends ManBase
 		return m_IsRestrainStarted;
 	}
 	
+	void SetRestrainPrelocked(bool restrain_prelock)
+	{
+		m_IsRestrainPrelocked = restrain_prelock;
+		SetSynchDirty();
+	}
+	
+	bool IsRestrainPrelocked()
+	{
+		return m_IsRestrainPrelocked;
+	}
+	
 	void SetRestrained(bool	is_restrained)
 	{
 		m_IsRestrained = is_restrained;
@@ -1265,7 +1292,7 @@ class PlayerBase extends ManBase
 	{
 		if( IsControlledPlayer() )
 		{
-			return !IsRestrained();
+			return !IsRestrained() && !IsRestrainPrelocked();
 		}
 		return true;
 	}
@@ -1280,9 +1307,9 @@ class PlayerBase extends ManBase
 		return super.CanReleaseCargo(cargo);
 	}
 	
-	override bool CanReceiveItemIntoCargo (EntityAI cargo)
+	override bool CanReceiveItemIntoCargo(EntityAI item)
 	{
-		return super.CanReceiveItemIntoCargo(cargo);
+		return super.CanReceiveItemIntoCargo(item);
 	}
 	
 	override bool CanSwapItemInCargo (EntityAI child_entity, EntityAI new_entity)
@@ -1310,8 +1337,12 @@ class PlayerBase extends ManBase
 	
 	override bool CanReceiveItemIntoHands (EntityAI item_to_hands)
 	{
-		if( IsInVehicle() )
+		if ( IsInVehicle() )
 			return false;
+		
+		if ( !CanPickupHeavyItem(item_to_hands) )
+			return false;
+		
 		return super.CanReceiveItemIntoHands(item_to_hands);
 	}
 	
@@ -1512,6 +1543,11 @@ class PlayerBase extends ManBase
 	override bool IsHoldingBreath()
 	{
 		return m_IsHoldingBreath;
+	}
+	
+	override bool IsRefresherSignalingViable()
+	{
+		return false;
 	}
 	
 	eMixedSoundStates GetMixedSoundStates()
@@ -2692,7 +2728,6 @@ class PlayerBase extends ManBase
 	{
 		if( GetInventory() ) GetInventory().LockInventory(LOCK_FROM_SCRIPT);
 		CloseInventoryMenu();
-		m_EmoteManager.OnCommandClimbStart();
 		
 		AbortWeaponEvent();
 		GetWeaponManager().DelayedRefreshAnimationState(10);
@@ -2767,10 +2802,16 @@ class PlayerBase extends ManBase
 		GetWeaponManager().RefreshAnimationState();
 	}
 	
+	override void OnCommandDeathStart()
+	{	
+		AbortWeaponEvent();	
+		GetWeaponManager().DelayedRefreshAnimationState(10);
+		RequestHandAnimationStateRefresh();
+	}
+	
 	override void OnJumpStart()
 	{
 		m_ActionManager.OnJumpStart();
-		m_EmoteManager.OnJumpStart();
 		
 		AbortWeaponEvent();
 		GetWeaponManager().DelayedRefreshAnimationState(10);
@@ -2812,6 +2853,13 @@ class PlayerBase extends ManBase
 			AbortWeaponEvent();
 			GetWeaponManager().RefreshAnimationState();
 		}
+	}
+	
+	void OnJumpOutVehicleFinish(float carSpeed)
+	{ 
+		string surfaceType;
+		int liquidType;
+		GetGame().SurfaceUnderObject(this, surfaceType, liquidType);
 	}
 		
 	void OnVehicleSwitchSeat( int seatIndex )
@@ -3036,6 +3084,28 @@ class PlayerBase extends ManBase
 		return DayZPhysics.RaycastRV( start, to, contact_pos, contact_dir, contact_component, NULL, NULL, this );
 	}*/
 	
+	bool IsTargetInActiveRefresherRange(EntityAI target)
+	{
+		array<vector> temp = new array<vector>;
+		temp = GetGame().GetMission().GetActiveRefresherLocations();
+		int count = temp.Count();
+		if (count > 0)
+		{
+			vector pos = target.GetPosition();
+			for (int i = 0; i < count; i++)
+			{
+				if ( vector.Distance(pos,temp.Get(i)) < GameConstants.REFRESHER_RADIUS )
+					return true;
+			}
+			
+			return false;
+		}
+		else
+		{
+			return false;
+		}
+	}
+	
 	void RequestHandAnimationStateRefresh()
 	{
 		if ( (GetGame().IsMultiplayer() && GetGame().IsServer()) )
@@ -3082,31 +3152,31 @@ class PlayerBase extends ManBase
 	//---------------------------------------------------------
 	void OnQuickBarSingleUse(int slotClicked)
 	{
-		if( GetInstanceType() == DayZPlayerInstanceType.INSTANCETYPE_SERVER )
+		if ( GetInstanceType() == DayZPlayerInstanceType.INSTANCETYPE_SERVER )
 			return;
 		
-		if (m_AreHandsLocked)
+		if ( m_AreHandsLocked )
 			return; //Player is in the short window of time after interrupting placement of an item and before getting it back in hands
 
-		if( GetInventory().IsInventoryLocked() || IsEmotePlaying() )
+		if ( GetInventory().IsInventoryLocked() || IsEmotePlaying() )
 			return;
 		
-		if( GetThrowing().IsThrowingModeEnabled() || GetThrowing().IsThrowingAnimationPlaying() )
+		if ( GetThrowing().IsThrowingModeEnabled() || GetThrowing().IsThrowingAnimationPlaying() )
 			return;
 		
-		if( IsRaised() || GetCommand_Melee() || IsSwimming() || IsClimbingLadder() || IsClimbing() || IsRestrained() )
+		if ( IsRaised() || GetCommand_Melee() || IsSwimming() || IsClimbingLadder() || IsClimbing() || IsRestrained() || IsRestrainPrelocked() )
 			return;
 		
-		if( GetDayZPlayerInventory().IsProcessing() || IsItemsToDelete() )
+		if ( GetDayZPlayerInventory().IsProcessing() || IsItemsToDelete() )
 			return;
 		
-		if( GetActionManager().GetRunningAction() != null )
+		if ( GetActionManager().GetRunningAction() != null )
 			return;
 		
-		if( GetWeaponManager() && GetWeaponManager().IsRunning() )
+		if ( GetWeaponManager() && GetWeaponManager().IsRunning() )
 			return;
 		
-		if (!ScriptInputUserData.CanStoreInputUserData())
+		if ( !ScriptInputUserData.CanStoreInputUserData() )
 			return;
 		
 		//TODO MW change locking method
@@ -3115,28 +3185,28 @@ class PlayerBase extends ManBase
 			
 		EntityAI quickBarEntity = GetQuickBarEntity(slotClicked - 1);//GetEntityInQuickBar(slotClicked - 1);
 		
-		if(!quickBarEntity)
+		if ( !quickBarEntity )
 			return;
 		
 		Magazine mag;
 		Weapon_Base wpn;
 		
-		if( Class.CastTo(mag, quickBarEntity) && Class.CastTo(wpn, mag.GetHierarchyParent()) )
+		if ( Class.CastTo(mag, quickBarEntity) && Class.CastTo(wpn, mag.GetHierarchyParent()) )
 			return;
 
 		EntityAI inHandEntity = GetHumanInventory().GetEntityInHands();
 				
-		if (!GetDayZPlayerInventory().IsIdle())
+		if ( !GetDayZPlayerInventory().IsIdle() )
 			return; // player is already performing some animation
 
 		InventoryLocation handInventoryLocation = new InventoryLocation;
 		handInventoryLocation.SetHands(this,quickBarEntity);
-		if( this.GetInventory().HasInventoryReservation(quickBarEntity, handInventoryLocation ) )
+		if ( this.GetInventory().HasInventoryReservation(quickBarEntity, handInventoryLocation ) )
 			return;
 		
-		if( inHandEntity == quickBarEntity )
+		if ( inHandEntity == quickBarEntity )
 		{
-			if( GetHumanInventory().CanRemoveEntityInHands() )
+			if ( GetHumanInventory().CanRemoveEntityInHands() )
 			{
 				syncDebugPrint("[QB] Stash - PredictiveMoveItemFromHandsToInventory HND=" + Object.GetDebugName(inHandEntity));
 				PredictiveMoveItemFromHandsToInventory();
@@ -3146,44 +3216,40 @@ class PlayerBase extends ManBase
 		{
 			InventoryLocation invLocQBItem = new InventoryLocation;
 			quickBarEntity.GetInventory().GetCurrentInventoryLocation(invLocQBItem);
-			if( GetInventory().HasInventoryReservation(quickBarEntity,invLocQBItem) )
+			if ( GetInventory().HasInventoryReservation(quickBarEntity,invLocQBItem) )
 				return;
 				
-			if (inHandEntity)
+			if ( inHandEntity )
 			{
 				InventoryLocation Reserved_Item_il = new InventoryLocation;
 				
 				InventoryLocation inHandEntityFSwapDst = new InventoryLocation;
 				inHandEntity.GetInventory().GetCurrentInventoryLocation(inHandEntityFSwapDst);
-				
-				
-				
+
 				int index = GetHumanInventory().FindUserReservedLocationIndex(inHandEntity);
-				if( index >= 0 )
-				{
+				if ( index >= 0 )
 					GetHumanInventory().GetUserReservedLocation( index, Reserved_Item_il);
-				}
 				
-				if(Reserved_Item_il)
+				if ( Reserved_Item_il )
 					inHandEntityFSwapDst.CopyLocationFrom(Reserved_Item_il, true);
 				
-				if(GameInventory.CanForceSwapEntitiesEx( quickBarEntity, null, inHandEntity, inHandEntityFSwapDst ))
-				{
-					syncDebugPrint("[QB] Swap - PredictiveForceSwapEntities HND=" + Object.GetDebugName(inHandEntity) +  " QB=" + Object.GetDebugName(quickBarEntity) + " fswap_dst=" + InventoryLocation.DumpToStringNullSafe(inHandEntityFSwapDst));
-					PredictiveForceSwapEntities( quickBarEntity, inHandEntity, inHandEntityFSwapDst );
-				}
-				else if(GameInventory.CanSwapEntitiesEx( quickBarEntity, inHandEntity ))
+				if ( index < 0 && GameInventory.CanSwapEntitiesEx( quickBarEntity, inHandEntity ) )
 				{
 					syncDebugPrint("[QB] PredictiveSwapEntities QB=" + Object.GetDebugName(quickBarEntity) + " HND=" + Object.GetDebugName(inHandEntity));
 					PredictiveSwapEntities( quickBarEntity, inHandEntity );
 				}
+				else if ( GameInventory.CanForceSwapEntitiesEx( quickBarEntity, null, inHandEntity, inHandEntityFSwapDst ) )
+				{
+					syncDebugPrint("[QB] Swap - PredictiveForceSwapEntities HND=" + Object.GetDebugName(inHandEntity) +  " QB=" + Object.GetDebugName(quickBarEntity) + " fswap_dst=" + InventoryLocation.DumpToStringNullSafe(inHandEntityFSwapDst));
+					PredictiveForceSwapEntities( quickBarEntity, inHandEntity, inHandEntityFSwapDst );
+				}
 			}
 			else
 			{
-				if( GetInventory().HasInventoryReservation(quickBarEntity,handInventoryLocation) )
+				if ( GetInventory().HasInventoryReservation(quickBarEntity,handInventoryLocation) )
 					return;
 				
-				if (GetInventory().CanAddEntityIntoHands(quickBarEntity) )
+				if ( GetInventory().CanAddEntityIntoHands(quickBarEntity) )
 				{
 					syncDebugPrint("[QB] Stash - PredictiveTakeEntityToHands QB=" + Object.GetDebugName(quickBarEntity));
 					PredictiveTakeEntityToHands( quickBarEntity );
@@ -3197,7 +3263,7 @@ class PlayerBase extends ManBase
 		if ( GetInventory().IsInventoryLocked() )
 			return;
 		
-		if ( IsSwimming() || IsClimbingLadder() || GetCommand_Melee() || IsClimbing() || IsRestrained() )
+		if ( IsSwimming() || IsClimbingLadder() || GetCommand_Melee() || IsClimbing() || IsRestrained() || IsRestrainPrelocked() )
 			return;
 		
 		ItemBase quickBarItem = ItemBase.Cast(GetQuickBarEntity(slotClicked - 1));
@@ -3295,33 +3361,40 @@ class PlayerBase extends ManBase
 	//Reload weapon with given magazine
 	void ReloadWeapon( EntityAI weapon, EntityAI magazine )
 	{
-		if( GetInstanceType() == DayZPlayerInstanceType.INSTANCETYPE_CLIENT )
+		if ( GetInstanceType() == DayZPlayerInstanceType.INSTANCETYPE_CLIENT )
 		{
-			if (GetWeaponManager().IsRunning())
+			ActionManagerClient mngr_client;
+			CastTo(mngr_client, GetActionManager());
+			
+			if (mngr_client && FirearmActionLoadMultiBulletRadial.Cast(mngr_client.GetRunningAction()))
 			{
-				GetWeaponManager().LoadMultiBulletStop();
+				mngr_client.Interrupt();
 			}
-			else if( GetHumanInventory().GetEntityInHands()!= magazine )
+			else if ( GetHumanInventory().GetEntityInHands()!= magazine )
 			{
 				Weapon_Base wpn;
 				Magazine mag;
 				Class.CastTo( wpn,  weapon );
 				Class.CastTo( mag,  magazine );
-				if( GetWeaponManager().CanUnjam(wpn) )
+				if ( GetWeaponManager().CanUnjam(wpn) )
 				{
 					GetWeaponManager().Unjam();
 				}
-				else if( GetWeaponManager().CanAttachMagazine( wpn, mag ) )
+				else if ( GetWeaponManager().CanAttachMagazine( wpn, mag ) )
 				{
 					GetWeaponManager().AttachMagazine( mag );
 				}
-				else if( GetWeaponManager().CanSwapMagazine( wpn, mag ) )
+				else if ( GetWeaponManager().CanSwapMagazine( wpn, mag ) )
 				{
 					GetWeaponManager().SwapMagazine( mag );
 				}
-				else if( GetWeaponManager().CanLoadBullet( wpn, mag ) )
+				else if ( GetWeaponManager().CanLoadBullet( wpn, mag ) )
 				{
-					GetWeaponManager().LoadMultiBullet( mag );
+					//GetWeaponManager().LoadMultiBullet( mag );
+
+					ActionTarget atrg = new ActionTarget(mag, this, -1, vector.Zero, -1.0);
+					if ( mngr_client && !mngr_client.GetRunningAction() && mngr_client.GetAction(FirearmActionLoadMultiBulletRadial).Can(this, atrg, wpn) )
+						mngr_client.PerformActionStart(mngr_client.GetAction(FirearmActionLoadMultiBulletRadial), atrg, wpn);
 				}
 			}
 		}		
@@ -3434,7 +3507,17 @@ class PlayerBase extends ManBase
 	void SetLiquidTendencyDrain(bool state)
 	{
 		m_LiquidTendencyDrain = state;
-		SetSynchDirty();
+	}
+	
+	//---------------------------------------------------------
+	bool GetFlagTendencyRaise()
+	{
+		return m_FlagRaisingTendency;
+	}
+	//---------------------------------------------------------
+	void SetFlagTendencyRaise(bool state)
+	{
+		m_FlagRaisingTendency = state;
 	}
 	
 	override SoundOnVehicle PlaySound(string sound_name, float range, bool create_local = false)
@@ -3456,7 +3539,7 @@ class PlayerBase extends ManBase
 	void SetPlayerLoad(float load)
 	{
 		m_CargoLoad = load;
-		
+		//Print("m_CargoLoad: " + m_CargoLoad);
 		//Log(ToString(this) + "'s load weight is " + ftoa(m_CargoLoad) + " g.", LogTemplates.TEMPLATE_PLAYER_WEIGHT);
 	}
 
@@ -3474,7 +3557,7 @@ class PlayerBase extends ManBase
 		return GetInventory().HasEntityInInventory(entity);
 	}
 
-	override bool NeedInventoryJunctureFromServer (notnull EntityAI item, EntityAI currParent, EntityAI newParent)
+	override bool NeedInventoryJunctureFromServer(notnull EntityAI item, EntityAI currParent, EntityAI newParent)
 	{
 		if (GetGame().IsMultiplayer())
 		{
@@ -3489,16 +3572,20 @@ class PlayerBase extends ManBase
 				case DayZPlayerInstanceType.INSTANCETYPE_AI_REMOTE:
 				case DayZPlayerInstanceType.INSTANCETYPE_REMOTE:
 					syncDebugPrint("[syncinv] " + GetDebugName(this) + " STS=" + GetSimulationTimeStamp() + " NeedInventoryJunctureFromServer item=" + Object.GetDebugName(item) + " currPar=" + currParent + " newPar=" + newParent);
+					
 					bool i_owned = GetHumanInventory().HasEntityInInventory(item);
+					
 					bool cp_owned = false;
 					if (currParent)
 						cp_owned = GetHumanInventory().HasEntityInInventory(currParent);
+					
 					bool np_owned = false;
 					if (newParent)
 						np_owned = GetHumanInventory().HasEntityInInventory(newParent);
 
 					bool all_owned = i_owned && cp_owned && (np_owned || (newParent == null));
 					syncDebugPrint("[syncinv] " + GetDebugName(this) + " STS=" + GetSimulationTimeStamp() + " NeedInventoryJunctureFromServer=" + !all_owned + " i_pwn=" + i_owned + " cp_pwn=" + cp_owned + " np_pwn=" + np_owned);
+					
 					return !all_owned;
 				default:
 					Error("[syncinv] unsupported instance type t=" + t);
@@ -3528,8 +3615,12 @@ class PlayerBase extends ManBase
 		}
 
 		if ( itemHands ) // adds weight of item carried in hands
+		{
 			total_load += itemHands.GetWeight();
+			//Print("itemHands.GetWeight(): " + itemHands.GetWeight());
+		}
 		m_Weight = total_load;
+		//Print("total_load: " + total_load);
 	}
 
 	void CalculateVisibilityForAI()
@@ -3799,6 +3890,13 @@ class PlayerBase extends ManBase
 	{
 		return m_MovementState.IsLeaning();
 	}	
+	
+	bool IsRolling()
+	{
+		if (GetCommand_Move() && GetCommand_Move().IsInRoll())
+			return true;
+		return false;
+	}
 	
 	override bool IsRaised()
 	{
@@ -4112,6 +4210,17 @@ class PlayerBase extends ManBase
 				}
 				break;
 			}
+			
+			case ERPCs.RPC_WARNING_ITEMDROP:
+			{
+				if ( GetGame().IsClient() && GetGame().GetUIManager() && !GetGame().GetUIManager().FindMenu(MENU_WARNING_ITEMDROP) )
+				{
+					//GetGame().GetCallQueue(CALL_CATEGORY_GAMEPLAY).CallLater(GetGame().GetUIManager().EnterScriptedMenu,1000,false,MENU_WARNING_ITEMDROP,null);
+					GetGame().GetCallQueue(CALL_CATEGORY_GAMEPLAY).Call(GetGame().GetUIManager().EnterScriptedMenu,MENU_WARNING_ITEMDROP,null);
+					GetGame().GetMission().PlayerControlDisable(INPUT_EXCLUDE_ALL);
+				}
+				break;
+			}
 		}
 		
 		//woodcutting
@@ -4232,6 +4341,13 @@ class PlayerBase extends ManBase
 			GetModifiersManager().SetModifiers(true);
 			
 			SetSynchDirty();
+			
+			//Drop item warning
+			if (GetGame().IsMultiplayer() && m_ProcessUIWarning)
+			{
+				GetGame().RPCSingleParam(this, ERPCs.RPC_WARNING_ITEMDROP, null, true, GetIdentity());
+				m_ProcessUIWarning = false;
+			}
 		}
 		
 		CheckForGag();
@@ -4409,7 +4525,12 @@ class PlayerBase extends ManBase
 				InventoryLocation dst = new InventoryLocation;
 				if (dst.ReadFromContext(ctx))
 				{
-					item1.SplitIntoStackMaxToInventoryLocation(dst);
+					Print(InventoryLocation.DumpToStringNullSafe(dst));
+					bool dummy;
+					if (ctx.Read(dummy))
+						item1.SplitItemToInventoryLocation(dst);
+					else
+						item1.SplitIntoStackMaxToInventoryLocation(dst);
 					return true;
 				}
 				return false;
@@ -5171,6 +5292,8 @@ class PlayerBase extends ManBase
 		{
 			m_EmoteManager.AfterStoreLoad();
 		}
+		UpdateWeight();
+		SetPlayerLoad( GetWeight() );
 		//SetSynchDirty();		
 	}
 
@@ -6886,7 +7009,9 @@ class PlayerBase extends ManBase
 			//Print("'decay_preload' loaded on " + this);
 		}
 		else
+		{
 			//Print("No 'decay_preload' selection found on " + this);
+		}
 	}
 	
 	void SetLastMapInfo(float scale, vector pos)
@@ -6942,6 +7067,11 @@ class PlayerBase extends ManBase
 			else
 				return true;
 		}
+	}
+	
+	override void SetProcessUIWarning(bool state)
+	{
+		m_ProcessUIWarning = state;
 	}
 	
 	void dmgDebugPrint(TotalDamageResult damageResult, int damageType, EntityAI source, int component, string dmgZone, string ammo, vector modelPos, float speedCoef)

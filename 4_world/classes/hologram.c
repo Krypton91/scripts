@@ -198,7 +198,7 @@ class Hologram
 		}
 		
 		//Camping & Base building
-		if ( item.IsInherited( TentBase ) || item.IsInherited( FenceKit ) || item.IsInherited( WatchtowerKit ) )
+		if ( item.IsInherited( TentBase ) || item.IsBasebuildingKit() )
 		{
 			return item.GetType() + "Placing";
 		}
@@ -213,7 +213,7 @@ class Hologram
 	
 	// update loop for visuals and collisions of the hologram
 	void UpdateHologram( float timeslice )
-	{		
+	{
 		if ( !m_Parent )
 		{
 			GetGame().GetCallQueue(CALL_CATEGORY_SYSTEM).Call(m_Player.TogglePlacingLocal);
@@ -347,8 +347,7 @@ class Hologram
 
 	void EvaluateCollision(ItemBase action_item = null)
 	{
-		//if ( IsHidden() || IsCollidingBBox() || IsCollidingPlayer() || IsCollidingBase() || IsCollidingGPlot() || IsCollidingZeroPos() || IsBehindObstacle() || IsCollidingAngle() )
-		if ( IsHidden() || IsCollidingBBox(action_item) || IsCollidingPlayer() || IsClippingRoof() || !IsBaseViable() || IsCollidingGPlot() || IsCollidingZeroPos() || IsCollidingAngle() || !IsPlacementPermitted() || !HeightPlacementCheck() )
+		if ( IsHidden() || IsCollidingBBox(action_item) || IsCollidingPlayer() || IsClippingRoof() || !IsBaseViable() || IsCollidingGPlot() || IsCollidingZeroPos() || IsCollidingAngle() || !IsPlacementPermitted() || !HeightPlacementCheck() || IsUnderwater() || IsInTerrain() )
 		{
 			SetIsColliding( true );
 		}
@@ -374,7 +373,20 @@ class Hologram
 	{
 		//Some locations allow you to look up and attempt placing the hologram on the bottom side of a floor - most notably the floors of a watchtower
 		//This check also prevents some very unnatural placements
-		return !GetGame().IsServer() && m_Projection.GetPosition()[1] > GetGame().GetCurrentCameraPosition()[1];
+		if (!GetGame().IsServer())
+		{
+			bool b1 = m_Projection.GetPosition()[1] > GetGame().GetCurrentCameraPosition()[1];
+			bool b2 = false;
+			if (m_Projection.DoPlacingHeightCheck())
+			{
+				b2 = MiscGameplayFunctions.IsUnderRoof(m_Projection);
+			}
+		}
+		else
+		{
+			return false;
+		}
+		return b1 || b2;
 	}
 	
 	bool IsCollidingAngle()
@@ -419,7 +431,7 @@ class Hologram
 
 		//add is construction check
 		// Base building objects behave in a way that causes this test to generate false positives
-		return GetGame().IsBoxColliding( center, orientation, edge_length, excluded_objects, collided_objects ) && (!collided_objects[0].IsInherited(BaseBuildingBase) || IsFenceOrWatchtowerKit()));
+		return GetGame().IsBoxColliding( center, orientation, edge_length, excluded_objects, collided_objects ) && (!collided_objects[0].IsInherited(BaseBuildingBase) || IsFenceOrWatchtowerKit());
 		
 		/*
 		if ( GetGame().IsBoxColliding( center, orientation, edge_length, excluded_objects, collided_objects ) && !collided_objects[0].IsInherited(BaseBuildingBase) )
@@ -437,9 +449,9 @@ class Hologram
 	}
 
 	bool IsBaseViable()
-	{
+	{	
 		//This function is not required to solve server-side fixes for clipping, saves calculations and potential false negatives
-		if (GetGame().IsServer())
+		if (GetGame().IsServer() && GetGame().IsMultiplayer())
 			return true;
 		
 		/*
@@ -538,7 +550,7 @@ class Hologram
 
 	bool IsCollidingZeroPos()
 	{
-		vector origin = Vector(0, 0, 0,);
+		vector origin = Vector(0, 0, 0);
 		return GetProjectionPosition() == origin;
 		
 		/*
@@ -785,6 +797,72 @@ class Hologram
 		return true;
 	}
 	
+	bool IsUnderwater()
+	{
+		// Fast check middle of object
+		string type;
+		int liquid;
+		g_Game.SurfaceUnderObject(m_Projection, type, liquid);
+		
+		if (liquid == LIQUID_WATER)
+			return true;
+		
+		// Check every corner of the object
+		vector left_close = m_Projection.CoordToParent( GetLeftCloseProjectionVector() );
+		vector right_close = m_Projection.CoordToParent( GetRightCloseProjectionVector() );
+		vector left_far = m_Projection.CoordToParent( GetLeftFarProjectionVector() );
+		vector right_far = m_Projection.CoordToParent( GetRightFarProjectionVector() );
+		
+		return (g_Game.GetWaterDepth(left_close) > 0 || g_Game.GetWaterDepth(right_close) > 0 || g_Game.GetWaterDepth(left_far) > 0 || g_Game.GetWaterDepth(right_far) > 0);
+	}
+	
+	bool IsInTerrain()
+	{
+		vector fromHeightOffset = "0 0.15 0";
+		vector toHeightOffset = "0 1 0";
+		
+		vector from_left_close = m_Projection.CoordToParent( GetLeftCloseProjectionVector() ) + fromHeightOffset;
+		vector to_left_close_down = from_left_close + toHeightOffset;
+
+		vector from_right_close = m_Projection.CoordToParent( GetRightCloseProjectionVector() ) + fromHeightOffset;
+		vector to_right_close_down = from_right_close + toHeightOffset;
+
+		vector from_left_far = m_Projection.CoordToParent( GetLeftFarProjectionVector() ) + fromHeightOffset;
+		vector to_left_far_down = from_left_far + toHeightOffset;
+
+		vector from_right_far = m_Projection.CoordToParent( GetRightFarProjectionVector() ) + fromHeightOffset;
+		vector to_right_far_down = from_right_far + toHeightOffset;
+
+		vector contact_pos_left_close;
+		vector contact_pos_right_close;
+		vector contact_pos_left_far;
+		vector contact_pos_right_far;
+		
+		vector contact_dir_left_close;
+		vector contact_dir_right_close;
+		vector contact_dir_left_far;
+		vector contact_dir_right_far;
+		
+		int contact_component_left_close;
+		int contact_component_right_close;
+		int contact_component_left_far;
+		int contact_component_right_far;
+
+		if (DayZPhysics.RaycastRV( from_left_close, to_left_close_down, contact_pos_left_close, contact_dir_left_close, contact_component_left_close, NULL, m_Projection, m_Projection, false, true ))
+			return true;
+
+		if (DayZPhysics.RaycastRV( from_right_close, to_right_close_down, contact_pos_right_close, contact_dir_right_close, contact_component_right_close, NULL,m_Projection, m_Projection, false, true ))
+			return true;
+
+		if (DayZPhysics.RaycastRV( from_left_far, to_left_far_down, contact_pos_left_far, contact_dir_left_far, contact_component_left_far, NULL, m_Projection, m_Projection, false, true ))
+			return true;
+
+		if (DayZPhysics.RaycastRV( from_right_far, to_right_far_down, contact_pos_right_far, contact_dir_right_far, contact_component_right_far, NULL, m_Projection, m_Projection, false, true ))
+			return true;
+		
+		return false;
+	}
+	
 	void CheckPowerSource()
 	{
 		//in range of its power source.
@@ -813,7 +891,7 @@ class Hologram
 	EntityAI PlaceEntity( EntityAI entity_for_placing )
 	{
 		//string-based comparison
-		if ( entity_for_placing.IsInherited( TentBase ) || entity_for_placing.IsInherited( FenceKit ) || entity_for_placing.IsInherited( WatchtowerKit ) ) //special little snowflakes
+		if ( entity_for_placing.IsInherited( TentBase ) || entity_for_placing.IsBasebuildingKit() ) //special little snowflakes
 		{
 			//condition redundant, return if you want
 			/*
@@ -846,8 +924,8 @@ class Hologram
 			//Debug.DrawSphere(m_Projection.ModelToWorld(min_max[0]) , 0.8,Colors.GREEN, ShapeFlags.ONCE);
 			//Debug.DrawSphere(m_Projection.ModelToWorld(min_max[1]), 0.8,Colors.GREEN, ShapeFlags.ONCE);
 		}
-	}	
-		
+	}
+	
 	protected vector GetCollisionBoxSize( vector min_max[2] )
 	{
 		vector box_size = Vector(1,1,1);
@@ -978,7 +1056,7 @@ class Hologram
 	
 	bool IsFenceOrWatchtowerKit()
 	{
-		return m_Parent.IsInherited(FenceKit) || m_Parent.IsInherited(WatchtowerKit) || m_Parent.IsInherited(TentBase);
+		return m_Parent.IsBasebuildingKit() || m_Parent.IsInherited(TentBase);
 	}
 	
 	vector CorrectForWatchtower( int contactComponent, vector contactPos, PlayerBase player, Object hitObject )
@@ -1198,7 +1276,12 @@ class Hologram
 	{
 		m_DefaultOrientation = GetGame().GetCurrentCameraDirection().VectorToAngles();
 		m_DefaultOrientation[1] = 0;
-
+		
+		if (!GetParentEntity().PlacementCanBeRotated())
+		{
+			m_DefaultOrientation = vector.Zero;
+		}
+		
 		return m_DefaultOrientation;
 	}
 
